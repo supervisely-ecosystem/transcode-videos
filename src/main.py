@@ -73,9 +73,16 @@ with sly.tqdm_sly(message="Transcoding videos...", total=project.total_items) as
                 progress.update(1)
 
 # upload transcoded project
-project.upload(
+output_project_id, _ = project.upload(
     PROJECT_DIR,
     api,
     workspace_id=project_info.workspace_id,
     project_name=project_info.name + "_transcoded",
 )
+
+
+try:
+    api.app.workflow.add_input_project(project_id)
+    api.app.workflow.add_output_project(output_project_id)
+except Exception:
+    sly.logger.warning("Unable to set workflows for the task.", exc_info=True)
