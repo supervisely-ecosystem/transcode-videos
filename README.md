@@ -20,7 +20,8 @@
 
 ## Overview
 
-This app transcodes videos in a project to MP4 format using the x264 codec. When run, the app creates a new project with the same structure as the original, but with all videos transcoded. The app is useful for preparing videos for further processing in Supervisely, as some video formats are not supported by the platform.
+This app ensures consistent video playback across different software by normalizing and transcoding videos to a common format. Video files may sometimes display inconsistently across various applications due to differing codec support or handling methods. This app standardizes playback and frame display.
+When run, the app creates a new project with the same structure as the original, but with all videos transcoded using x264 video codec, AAC audio codec, MP4 container format and constant frame rate, ensuring compatibility with most video players and editors.
 
 ## How To Use
 
