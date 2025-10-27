@@ -1,0 +1,4 @@
+.venv
+supervisely
+project
+**/__pycache__
