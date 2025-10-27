@@ -4,6 +4,7 @@ import subprocess
 
 import supervisely as sly
 from dotenv import load_dotenv
+from utils import _remap_annotations
 
 if sly.is_development():
     load_dotenv("local.env")
@@ -12,8 +13,10 @@ if sly.is_development():
 api = sly.Api()
 
 project_id = sly.env.project_id(raise_not_found=True)
-PROJECT_DIR = "project"
 project_info = api.project.get_info_by_id(project_id, raise_error=True)
+
+PROJECT_DIR = "project"
+sly.fs.mkdir(PROJECT_DIR, True)
 
 
 def _transcode(path: str, video_codec: str = "libx264", audio_codec: str = "aac"):
@@ -48,8 +51,11 @@ sly.download_async(
     PROJECT_DIR,
 )
 
-# transcode videos
 project = sly.VideoProject(PROJECT_DIR, sly.OpenMode.READ)
+meta_path = os.path.join(PROJECT_DIR, "meta.json")
+project_meta = sly.ProjectMeta.from_json(sly.json.load_json_file(meta_path))
+
+# transcode videos
 with sly.tqdm_sly(message="Transcoding videos...", total=project.total_items) as progress:
     for dataset in project:
         dataset: sly.VideoDataset
@@ -58,15 +64,14 @@ with sly.tqdm_sly(message="Transcoding videos...", total=project.total_items) as
                 output_path = _transcode(video_path)
             except Exception:
                 sly.logger.warning(
-                    "Failed to transcode video: %s. It will be skipped.", video_path, exc_info=True
+                    f"Failed to transcode video: {video_path}. It will be skipped.", exc_info=True
                 )
             else:
                 result_path = video_path if video_path.endswith(".mp4") else video_path + ".mp4"
-                # rename annotation file
-                shutil.move(ann_path, ann_path.replace(video_path, result_path))
-                # rename transcoded video file
+                result_ann_path = ann_path.replace(video_path, result_path)
+                _remap_annotations(project_meta, ann_path, video_path, output_path)
+                shutil.move(ann_path, result_ann_path)
                 shutil.move(output_path, result_path)
-                # delete original video file if needed
                 if video_path != result_path:
                     os.remove(video_path)
             finally:
