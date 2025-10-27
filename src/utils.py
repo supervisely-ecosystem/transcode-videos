@@ -99,10 +99,18 @@ def _remap_annotations(
         vfr_timestamps = _get_frame_timestamps(old_video_path)
         cfr_timestamps = _get_frame_timestamps(new_video_path)
 
-        new_frames = []
-        cfr_indices = list(range(new_frame_count))
+        actual_cfr_count = len(cfr_timestamps)
+        if actual_cfr_count != new_frame_count:
+            sly.logger.warning(
+                f"Frame count mismatch: ffprobe reports {new_frame_count} frames, "
+                f"but only {actual_cfr_count} timestamps found. Using {actual_cfr_count}."
+            )
+            new_frame_count = actual_cfr_count
 
-        with sly.tqdm_sly("Remapping annotation frames", total=new_frame_count) as progress:
+        new_frames = []
+        cfr_indices = list(range(actual_cfr_count))
+
+        with sly.tqdm_sly("Remapping annotation frames", total=actual_cfr_count) as progress:
             for cfr_batch in sly.batched(cfr_indices, batch_size=10000):
                 batch_frames = []
 
