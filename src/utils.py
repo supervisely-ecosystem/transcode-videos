@@ -36,8 +36,9 @@ def _get_frame_timestamps(video_path: str):
             "error",
             "-select_streams",
             "v:0",
+            "-show_frames",
             "-show_entries",
-            "frame=pts_time",
+            "frame=best_effort_timestamp_time",
             "-of",
             "json",
             video_path,
@@ -47,23 +48,30 @@ def _get_frame_timestamps(video_path: str):
         stderr=subprocess.PIPE,
         text=True,
     )
+
     data = json.loads(result.stdout)
-    timestamps = []
-    for frame in data.get("frames", []):
-        if "pts_time" in frame:
-            timestamps.append(float(frame["pts_time"]))
+    timestamps = [
+        float(frame["best_effort_timestamp_time"])
+        for frame in data.get("frames", [])
+        if "best_effort_timestamp_time" in frame
+    ]
     return timestamps
 
 
-def _find_vfr_frame_for_timestamp(cfr_ts: float, vfr_timestamps: list) -> int:
-    left, right = 0, len(vfr_timestamps) - 1
-    while left < right:
-        mid = (left + right + 1) // 2
-        if vfr_timestamps[mid] <= cfr_ts:
-            left = mid
-        else:
-            right = mid - 1
-    return left
+def _build_vfr_to_cfr_map(vfr_timestamps: list, cfr_timestamps: list) -> dict:
+    frame_map = {}
+    for cfr_idx, cfr_ts in enumerate(cfr_timestamps):
+        vfr_idx = 0
+        for i, vfr_ts in enumerate(vfr_timestamps):
+            if i + 1 < len(vfr_timestamps):
+                next_vfr_ts = vfr_timestamps[i + 1]
+                if vfr_ts <= cfr_ts < next_vfr_ts:
+                    vfr_idx = i
+                    break
+            else:
+                vfr_idx = i
+        frame_map[cfr_idx] = vfr_idx
+    return frame_map
 
 
 def _remap_annotations(
@@ -72,7 +80,6 @@ def _remap_annotations(
     try:
         old_frame_count = _get_frame_count(old_video_path)
         new_frame_count = _get_frame_count(new_video_path)
-
         if old_frame_count == new_frame_count:
             return
 
@@ -95,28 +102,18 @@ def _remap_annotations(
             return
 
         vfr_frames_dict = {frame.index: frame for frame in old_video_ann.frames}
-        sly.logger.info(f"Loading timestamps for {len(vfr_frames_dict)} annotated VFR frames")
         vfr_timestamps = _get_frame_timestamps(old_video_path)
         cfr_timestamps = _get_frame_timestamps(new_video_path)
+        new_frame_count = len(cfr_timestamps)
 
-        actual_cfr_count = len(cfr_timestamps)
-        if actual_cfr_count != new_frame_count:
-            sly.logger.warning(
-                f"Frame count mismatch: ffprobe reports {new_frame_count} frames, "
-                f"but only {actual_cfr_count} timestamps found. Using {actual_cfr_count}."
-            )
-            new_frame_count = actual_cfr_count
-
+        frame_map = _build_vfr_to_cfr_map(vfr_timestamps, cfr_timestamps)
         new_frames = []
-        cfr_indices = list(range(actual_cfr_count))
-
-        with sly.tqdm_sly("Remapping annotation frames", total=actual_cfr_count) as progress:
+        cfr_indices = list(range(new_frame_count))
+        with sly.tqdm_sly("Remapping annotation frames", total=new_frame_count) as progress:
             for cfr_batch in sly.batched(cfr_indices, batch_size=10000):
                 batch_frames = []
-
                 for cfr_idx in cfr_batch:
-                    cfr_ts = cfr_timestamps[cfr_idx]
-                    vfr_idx = _find_vfr_frame_for_timestamp(cfr_ts, vfr_timestamps)
+                    vfr_idx = frame_map[cfr_idx]
                     if vfr_idx not in vfr_frames_dict:
                         continue
                     vfr_frame = vfr_frames_dict[vfr_idx]
@@ -128,7 +125,6 @@ def _remap_annotations(
                         )
                         for figure in vfr_frame.figures
                     ]
-
                     if new_figures:
                         batch_frames.append(sly.Frame(index=cfr_idx, figures=new_figures))
 
