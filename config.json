@@ -8,10 +8,10 @@
   "icon": "https://github.com/user-attachments/assets/79bbb457-0120-430c-b64a-e8cde1ce0b5a",
   "icon_cover": true,
   "poster": "https://github.com/user-attachments/assets/0b6cdd36-21c1-4f3f-b396-e66ccc476052",
-  "docker_image": "supervisely/base-py-sdk:6.73.461",
+  "docker_image": "supervisely/base-py-sdk:6.74.34",
   "context_menu": {
     "target": ["videos_project"],
     "context_category": "Transform"
   },
-  "instance_version": "6.15.2"
+  "instance_version": "6.17.22"
 }
